@@ -78,7 +78,7 @@ def dump_jurisdiction_data(where):
         if x in meta:
             meta.pop(x, None)
 
-    for key in meta.keys():
+    for key in list(meta.keys()):
         if key.startswith("_") and key != "_id":
             meta.pop(key)
 
