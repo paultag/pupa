@@ -68,7 +68,7 @@ class BaseImporter(object):
         # no-op to be overridden
         return data
 
-    def import_directory(self, datadir):
+    def import_iterator(self, iterator):
         """ import a JSON directory into the database """
         # id: json
         data_by_id = {}
@@ -76,16 +76,14 @@ class BaseImporter(object):
         seen_hashes = {}
 
         # load all json, mapped by json_id
-        for fname in glob.glob(os.path.join(datadir, self._type + '_*.json')):
-            with open(fname) as f:
-                data = json.load(f)
-                json_id = data.pop('_id')
-                objhash = omnihash(data)
-                if objhash not in seen_hashes:
-                    seen_hashes[objhash] = json_id
-                    data_by_id[json_id] = data
-                else:
-                    self.duplicates[json_id] = seen_hashes[objhash]
+        for data in iterator:
+            json_id = data.pop('_id')
+            objhash = omnihash(data)
+            if objhash not in seen_hashes:
+                seen_hashes[objhash] = json_id
+                data_by_id[json_id] = data
+            else:
+                self.duplicates[json_id] = seen_hashes[objhash]
 
         # toposort the nodes so parents are imported first
         network = Network()
@@ -128,6 +126,19 @@ class BaseImporter(object):
             self.results[what] += 1
 
         return {self._type: self.results}
+
+
+    def import_directory(self, datadir):
+        """ import a JSON directory into the database """
+
+        def _loader():
+            for fname in glob.glob(os.path.join(datadir, self._type + '_*.json')):
+                with open(fname) as f:
+                    data = json.load(f)
+                yield data
+
+        return import_iterator(_loader())
+
 
     def import_json(self, data):
         what = None
