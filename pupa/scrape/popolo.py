@@ -1,8 +1,14 @@
-from .base import BaseModel, SourceMixin, LinkMixin, ContactDetailMixin
+import copy
+from .base import (BaseModel, SourceMixin, LinkMixin, ContactDetailMixin, OtherNameMixin,
+                   IdentifierMixin)
 from .schemas.post import schema as post_schema
 from .schemas.person import schema as person_schema
 from .schemas.membership import schema as membership_schema
 from .schemas.organization import schema as org_schema
+
+# a copy of the org schema without sources
+org_schema_no_sources = copy.deepcopy(org_schema)
+org_schema_no_sources['properties'].pop('sources')
 
 
 class Post(BaseModel, LinkMixin, ContactDetailMixin):
@@ -13,18 +19,17 @@ class Post(BaseModel, LinkMixin, ContactDetailMixin):
     _type = 'post'
     _schema = post_schema
 
-    def __init__(self, label, role, organization_id, **kwargs):
+    def __init__(self, label, role, organization_id, start_date='', end_date=''):
         super(Post, self).__init__()
         self.label = label
         self.role = role
         self.organization_id = organization_id
-        self.start_date = ''
-        self.end_date = ''
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+        self.start_date = start_date
+        self.end_date = end_date
 
     def __str__(self):
         return self.label
+    __unicode__ = __str__
 
 
 class Membership(BaseModel, ContactDetailMixin, LinkMixin):
@@ -35,7 +40,8 @@ class Membership(BaseModel, ContactDetailMixin, LinkMixin):
     _type = 'membership'
     _schema = membership_schema
 
-    def __init__(self, person_id, organization_id, **kwargs):
+    def __init__(self, person_id, organization_id, post_id=None,
+                 role='', label='', start_date='', end_date='', on_behalf_of_id=None):
         """
         Constructor for the Membership object.
 
@@ -46,16 +52,13 @@ class Membership(BaseModel, ContactDetailMixin, LinkMixin):
         super(Membership, self).__init__()
         self.person_id = person_id
         self.organization_id = organization_id
-        self.start_date = ''
-        self.end_date = ''
-        self.role = ''
-        self.label = ''
-        self.post_id = None
-        self.on_behalf_of_id = None
+        self.post_id = post_id
+        self.start_date = start_date
+        self.end_date = end_date
+        self.role = role
+        self.label = label
+        self.on_behalf_of_id = on_behalf_of_id
         self._unmatched_legislator = None
-
-        for k, v in kwargs.items():
-            setattr(self, k, v)
 
     def __str__(self):
         if self.person_id:
@@ -65,7 +68,8 @@ class Membership(BaseModel, ContactDetailMixin, LinkMixin):
     __unicode__ = __str__
 
 
-class Person(BaseModel, SourceMixin, ContactDetailMixin, LinkMixin):
+class Person(BaseModel, SourceMixin, ContactDetailMixin, LinkMixin, IdentifierMixin,
+             OtherNameMixin):
     """
     Details for a Person in Popolo format.
     """
@@ -73,38 +77,18 @@ class Person(BaseModel, SourceMixin, ContactDetailMixin, LinkMixin):
     _type = 'person'
     _schema = person_schema
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, birth_date='', death_date='', biography='', summary='', image='',
+                 gender='', national_identity=''):
         super(Person, self).__init__()
         self.name = name
-        self.birth_date = ''
-        self.death_date = ''
-        self.biography = ''
-        self.summary = ''
-        self.image = ''
-        self.gender = ''
-        self.national_identity = ''
-        self.identifiers = []
-        self.other_names = []
-        self._related = []
+        self.birth_date = birth_date
+        self.death_date = death_date
+        self.biography = biography
+        self.summary = summary
+        self.image = image
+        self.gender = gender
+        self.national_identity = national_identity
 
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-    def add_name(self, name, start_date=None, end_date=None, note=None):
-        other_name = {'name': name}
-        if start_date:
-            other_name['start_date'] = start_date
-        if end_date:
-            other_name['end_date'] = end_date
-        if note:
-            other_name['note'] = note
-        self.other_names.append(other_name)
-
-    def add_identifier(self, identifier, scheme=None):
-        data = {"identifier": identifier}
-        if scheme:
-            data['scheme'] = scheme
-        self.identifiers.append(data)
 
     def add_membership(self, organization, role='member', **kwargs):
         """
@@ -119,73 +103,46 @@ class Person(BaseModel, SourceMixin, ContactDetailMixin, LinkMixin):
         return self.name
     __unicode__ = __str__
 
-    def __repr__(self):
-        as_dict = self.as_dict()
-        list(map(as_dict.pop, ('_type', '_id', 'name')))
-        args = (self.__class__.__name__, self.name, as_dict)
-        return '%s(name=%r, **%r)' % args
 
-
-class Organization(BaseModel, SourceMixin, ContactDetailMixin, LinkMixin):
+class Organization(BaseModel, SourceMixin, ContactDetailMixin, LinkMixin, IdentifierMixin,
+                   OtherNameMixin):
     """
-    A single popolo encoded Organization
+    A single popolo-style Organization
     """
 
     _type = 'organization'
     _schema = org_schema
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, classification=None, parent_id=None, founding_date='',
+                 dissolution_date='', image=''):
         """
         Constructor for the Organization object.
         """
         super(Organization, self).__init__()
         self.name = name
-        self.classification = None
-        self.founding_date = ''
-        self.dissolution_date = ''
-        self.parent_id = None
-        self.image = ''
-        self.other_names = []
-        self.identifiers = []
-        self._related = []
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+        self.classification = classification
+        self.founding_date = founding_date
+        self.dissolution_date = dissolution_date
+        self.parent_id = parent_id
+        self.image = image
 
     def __str__(self):
         return self.name
     __unicode__ = __str__
 
-    def __repr__(self):
-        as_dict = self.as_dict()
-        list(map(as_dict.pop, ('_id', 'name')))
-        args = (self.__class__.__name__, self.name, as_dict)
-        return '%s(name=%r, **%r)' % args
-
     def validate(self):
         schema = None
         if self.classification in ['party']:
-            # Parties are funny objects. They don't need sources, since
-            # they're really not something we scrape directly (well, ever).
-            # As a result, we're not going to enforce placing sources on a
-            # party object.
-            schema = self._schema.copy()
-            schema['properties'] = schema['properties'].copy()
-            schema['properties'].pop('sources')
+            schema = org_schema_no_sources
         return super(Organization, self).validate(schema=schema)
 
-    @property
-    def parent(self):
-        return self.parent_id
+    #@property
+    #def parent(self):
+    #    return self.parent_id
 
-    @parent.setter
-    def parent(self, val):
-        self.parent_id = val._id
-
-    def add_identifier(self, identifier, scheme=None):
-        data = {"identifier": identifier}
-        if scheme:
-            data['scheme'] = scheme
-        self.identifiers.append(data)
+    #@parent.setter
+    #def parent(self, val):
+    #    self.parent_id = val._id
 
     def add_post(self, label, role, **kwargs):
         post = Post(label=label, role=role, organization_id=self._id, **kwargs)
