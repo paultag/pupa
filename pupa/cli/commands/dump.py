@@ -15,17 +15,39 @@ def parse_page(url):
         id = person['id']
         pjson = requests.get('https://api.opencivicdata.org/{}/?apikey={}'.format(id,
                                                                                   settings.API_KEY))
+        dirname = os.path.dirname(id)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+
         with open(id, 'w') as f:
             f.write(pjson.text)
     page = data['meta']['page'] + 1
     return page if page <= data['meta']['max_page'] else None
 
 
-def dump_people():
-    os.makedirs('ocd-person')
+def dump_pages(endpoint):
     page = 1
     while page:
-        page = parse_page('https://api.opencivicdata.org/people/?fields=id&page={}'.format(page))
+        page = parse_page('https://api.opencivicdata.org/{}/?fields=id&page={}'.format(
+            endpoint,
+            page
+        ))
+
+
+def dump_jurisdictions():
+    dump_pages('jurisdictions')
+
+
+def dump_people():
+    dump_pages('people')
+
+
+def dump_organizations():
+    dump_pages('organizations')
+
+
+def dump_bills():
+    dump_pages('bills')
 
 
 def upload(filename, bucket, s3_path):
@@ -50,7 +72,10 @@ class Command(BaseCommand):
     def handle(self, args, other):
         bucket = 'allthe.opencivicdata.org'
         fname = 'ocd-allpeople.tar.gz'
+        dump_jurisdictions()
+        dump_bills()
         dump_people()
+        dump_organizations()
         os.system('tar cf {} ocd-person/'.format(fname))
         upload(fname, bucket, fname)
         upload(fname, bucket, datetime.date.today().strftime('%Y%m%d-') + fname)
